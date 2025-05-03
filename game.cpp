@@ -16,11 +16,13 @@ public:
     bool gameover;
     struct Coord { int x, y; };
     vector<Coord> bullets, enemies;
+    vector<Coord> bossLasers;
 
     // Boss
     bool bossActive = false;
     int bossX = 0, bossY = 2, bossHealth = 10;
     int bossDirection = 1;
+    int bossLaserCooldown = 0;
 
 public:
     SpaceShooter(int w, int h) : width(w), height(h), x(w / 2), y(h - 4),
@@ -67,7 +69,8 @@ public:
                 bullets.erase(bullets.begin() + i);
                 if (bossHealth <= 0) {
                     bossActive = false;
-                    score += 100; // Big bonus!
+                    score += 100;
+                    bossLasers.clear(); // Clear any remaining boss lasers
                 }
                 continue;
             }
@@ -87,12 +90,11 @@ public:
                 bullets.erase(bullets.begin() + i);
         }
 
-        // 🟡 Activate boss at score 50
-        if (!bossActive && score >= 10) {
+        if (!bossActive && score >= 1) {
             bossActive = true;
             bossX = 10;
             bossHealth = 10;
-            enemies.clear(); // 💥 Clear all regular enemies!
+            enemies.clear(); // 💥 Remove regular enemies
             Beep(800, 300);  // Boss appears
         }
     }
@@ -103,7 +105,6 @@ public:
             if (bossX <= 1 || bossX >= width - 10)
                 bossDirection *= -1;
 
-            // Collision with player
             if ((bossX <= x + 4 && bossX + 6 >= x) && bossY + 1 >= y) {
                 health = 0;
                 gameover = true;
@@ -128,10 +129,36 @@ public:
         }
     }
 
+    void updateBossLasers() {
+        if (!bossActive) return;
+
+        bossLaserCooldown++;
+        if (bossLaserCooldown >= 10) {
+            int laserX = bossX + rand() % 7;
+            bossLasers.push_back({ laserX, bossY + 2 });
+            bossLaserCooldown = 0;
+        }
+
+        for (int i = bossLasers.size() - 1; i >= 0; i--) {
+            bossLasers[i].y += 1;
+
+            if (bossLasers[i].y >= y - 2 &&
+                bossLasers[i].x >= x && bossLasers[i].x <= x + 4) {
+                bossLasers.erase(bossLasers.begin() + i);
+                health--;
+                Beep(300, 100);
+                if (health <= 0) gameover = true;
+            } else if (bossLasers[i].y > height - 1) {
+                bossLasers.erase(bossLasers.begin() + i);
+            }
+        }
+    }
+
     void drawObjects() {
         drawPlane();
         for (auto& b : bullets) drawChar(b.x, b.y, '|');
         for (auto& e : enemies) drawChar(e.x, e.y, 'V');
+        for (auto& l : bossLasers) drawChar(l.x, l.y, '|');
 
         if (bossActive) {
             gotoxy(bossX, bossY);     cout << " [BOSS] ";
@@ -172,6 +199,7 @@ int main() {
             game.generateEnemies();
             game.updateBullets();
             game.updateEnemies();
+            game.updateBossLasers();
 
             game.erasePlane();
             game.drawObjects();
